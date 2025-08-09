@@ -1,0 +1,77 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java for build
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Build JAR
+        run: mvn clean package -DskipTests
+
+      - name: Install Java on EC2 and Setup Environment
+        uses: appleboy/ssh-action@v0.1.8
+        with:
+          host: ec2-13-235-243-167.ap-south-1.compute.amazonaws.com 
+          username: ubantu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            sudo apt-get update -y
+            sudo apt-get install -y openjdk-17-jdk
+            echo 'DB_URL=jdbc:mysql://crm-database.ctcg8kau8ih1.ap-south-1.rds.amazonaws.com/CRM' | sudo tee /etc/environment
+            echo 'DB_USERNAME=admin' | sudo tee -a /etc/environment
+            echo 'DB_PASSWORD=Ga9971684046' | sudo tee -a /etc/environment
+
+            sudo tee /etc/systemd/system/springboot-app.service > /dev/null <<EOL
+            [Unit]
+            Description=Spring Boot Application
+            After=network.target
+
+            [Service]
+            User=ubuntu
+            ExecStart=/usr/bin/java -jar /home/ubuntu/springboot-app/app.jar
+            Restart=always
+            RestartSec=5
+            StandardOutput=append:/home/ubuntu/springboot-app/app.log
+            StandardError=append:/home/ubuntu/springboot-app/app-error.log
+
+            [Install]
+            WantedBy=multi-user.target
+            EOL
+
+            sudo tee /etc/systemd/system/springboot-app.path > /dev/null <<EOL
+            [Unit]
+            Description=Watch for app.jar changes
+
+            [Path]
+            PathChanged=/home/ubuntu/springboot-app/app.jar
+
+            [Install]
+            WantedBy=multi-user.target
+            EOL
+
+            sudo systemctl daemon-reload
+            sudo systemctl enable springboot-app.service
+            sudo systemctl enable springboot-app.path
+            sudo systemctl start springboot-app.path
+
+      - name: Upload JAR to EC2
+        uses: appleboy/scp-action@master
+        with:
+          host: ec2-13-235-243-167.ap-south-1.compute.amazonaws.com 
+          username: ubantu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "target/*.jar"
+          target: "/home/ubuntu/springboot-app/app.jar"

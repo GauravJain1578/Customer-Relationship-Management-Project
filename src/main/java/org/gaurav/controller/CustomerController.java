@@ -48,7 +48,7 @@ public class CustomerController {
 
 
         Customer customer=service.getCustomer(customerId);
-        model.addAttribute("cutoo", customer);
+        model.addAttribute("cuto", customer);
 
         return "customer-form";
     }

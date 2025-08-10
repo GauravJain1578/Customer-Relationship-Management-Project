@@ -100,6 +100,16 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           source: "target/BootMVCProj-8-CRM-CRUDAPP-0.0.1-SNAPSHOT.jar"
           target: "/home/ubuntu/springboot-app/app.jar"
+          strip_components: 1
+      - name: Verify uploaded JAR
+        uses: appleboy/ssh-action@v0.1.8
+        with:
+            host: ec2-13-235-243-167.ap-south-1.compute.amazonaws.com 
+            username: ubuntu
+            key: ${{ secrets.EC2_SSH_KEY }}
+            script: |
+              ls -l /home/ubuntu/springboot-app/app.jar
+              file /home/ubuntu/springboot-app/app.jar
 
       - name: Restart Spring Boot Service
         uses: appleboy/ssh-action@master

@@ -93,9 +93,6 @@ jobs:
       - name: Wait before upload
         uses: actions/github-script@v6
         with:
-          host: ec2-13-235-243-167.ap-south-1.compute.amazonaws.com 
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             console.log('Waiting 5 seconds before upload')
             await new Promise(resolve => setTimeout(resolve, 5000))

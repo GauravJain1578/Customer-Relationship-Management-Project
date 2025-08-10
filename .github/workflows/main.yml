@@ -9,10 +9,10 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Java for build
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -24,7 +24,7 @@ jobs:
       - name: Install Java on EC2 and Setup Environment
         uses: appleboy/ssh-action@v0.1.8
         with:
-          host: ${{ secrets.Host }}
+          host: ${{ secrets.HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
@@ -33,7 +33,6 @@ jobs:
             echo 'DB_URL=jdbc:mysql://crm-database.ctcg8kau8ih1.ap-south-1.rds.amazonaws.com/CRM' | sudo tee /etc/environment
             echo 'DB_USERNAME=admin' | sudo tee -a /etc/environment
             echo 'DB_PASSWORD=Ga9971684046' | sudo tee -a /etc/environment
-
             sudo tee /etc/systemd/system/springboot-app.service > /dev/null <<EOL
             [Unit]
             Description=Spring Boot Application
@@ -51,62 +50,28 @@ jobs:
             WantedBy=multi-user.target
             EOL
 
-            sudo tee /etc/systemd/system/springboot-app.path > /dev/null <<EOL
-            [Unit]
-            Description=Watch for app.jar changes
-
-            [Path]
-            PathChanged=/home/ubuntu/springboot-app/app.jar
-
-            [Install]
-            WantedBy=multi-user.target
-            EOL
-
             sudo systemctl daemon-reload
             sudo systemctl enable springboot-app.service
-            sudo systemctl enable springboot-app.path
-            sudo systemctl start springboot-app.path
 
-      - name: List target folder contents before upload
+      - name: List built JAR
         run: ls -l target/
 
-      - name: Check file types in target
-        run: file target/*
-
-      - name: Clean up existing app.jar file on EC2
-        uses: appleboy/ssh-action@v0.1.8
-        with:
-          host: ${{ secrets.Host }}
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            rm -rf /home/ubuntu/springboot-app/app.jar
-
-      - name: Upload JAR to EC2
+      - name: Upload actual JAR file to EC2
         uses: appleboy/scp-action@v0.1.5
         with:
-          host: ${{ secrets.Host }}
+          host: ${{ secrets.HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           source: "target/BootMVCProj-8-CRM-CRUDAPP-0.0.1-SNAPSHOT.jar"
-          target: "/home/ubuntu/springboot-app/app.jar"
+          target: "/home/ubuntu/springboot-app/BootMVCProj-8-CRM-CRUDAPP-0.0.1-SNAPSHOT.jar"
 
-      - name: Verify uploaded JAR
+      - name: Create symlink and restart service on EC2
         uses: appleboy/ssh-action@v0.1.8
         with:
-          host: ${{ secrets.Host }}
+          host: ${{ secrets.HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            ls -l /home/ubuntu/springboot-app/app.jar
-            file /home/ubuntu/springboot-app/app.jar
-
-      - name: Restart Spring Boot Service
-        uses: appleboy/ssh-action@v0.1.8
-        with:
-          host: ${{ secrets.Host }}
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
+            ln -sf /home/ubuntu/springboot-app/BootMVCProj-8-CRM-CRUDAPP-0.0.1-SNAPSHOT.jar /home/ubuntu/springboot-app/app.jar
             sudo systemctl daemon-reload
             sudo systemctl restart springboot-app

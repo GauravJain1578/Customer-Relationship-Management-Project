@@ -90,6 +90,25 @@ jobs:
            key: ${{ secrets.EC2_SSH_KEY }}
            script: |
              rm -rf /home/ubuntu/springboot-app/app.jar
+      - name: Wait before upload
+        uses: actions/github-script@v6
+        with:
+          host: ec2-13-235-243-167.ap-south-1.compute.amazonaws.com 
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            console.log('Waiting 5 seconds before upload')
+            await new Promise(resolve => setTimeout(resolve, 5000))
+      - name: Verify app.jar removal again before upload
+        uses: appleboy/ssh-action@v0.1.8
+        with:
+           host: ec2-13-235-243-167.ap-south-1.compute.amazonaws.com 
+           username: ubuntu
+           key: ${{ secrets.EC2_SSH_KEY }}
+           script: |
+             ls -ld /home/ubuntu/springboot-app/app.jar || echo "app.jar not found"
+
+
       - name: Check app.jar after cleanup
         uses: appleboy/ssh-action@v0.1.8
         with:

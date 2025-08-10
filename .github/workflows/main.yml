@@ -90,6 +90,15 @@ jobs:
            key: ${{ secrets.EC2_SSH_KEY }}
            script: |
              rm -rf /home/ubuntu/springboot-app/app.jar
+      - name: Check app.jar after cleanup
+        uses: appleboy/ssh-action@v0.1.8
+        with:
+           host: ec2-13-235-243-167.ap-south-1.compute.amazonaws.com 
+           username: ubuntu
+           key: ${{ secrets.EC2_SSH_KEY }}
+           script: |
+             ls -ld /home/ubuntu/springboot-app/app.jar || echo "app.jar not found"
+
 
 
       - name: Upload JAR to EC2

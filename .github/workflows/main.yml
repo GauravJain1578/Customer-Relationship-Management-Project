@@ -80,7 +80,7 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            rm -f /home/ubuntu/springboot-app/app.jar
+            rm -rf /home/ubuntu/springboot-app/app.jar
 
       - name: Upload JAR to EC2
         uses: appleboy/scp-action@v0.1.5

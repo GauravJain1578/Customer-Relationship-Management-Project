@@ -1,0 +1,7 @@
+- pipeline: deploy_to_ec2
+  name: deploy to ec2
+  refs:
+  - refs/heads/master
+  events:
+  - type: PUSH
+  fail_on_prepare_env_warning: true

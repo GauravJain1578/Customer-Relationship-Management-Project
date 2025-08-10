@@ -24,7 +24,7 @@ jobs:
       - name: Install Java on EC2 and Setup Environment
         uses: appleboy/ssh-action@v0.1.8
         with:
-          host: ec2-13-235-243-167.ap-south-1.compute.amazonaws.com 
+          host: ${{ secrets.Host }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
@@ -66,93 +66,47 @@ jobs:
             sudo systemctl enable springboot-app.service
             sudo systemctl enable springboot-app.path
             sudo systemctl start springboot-app.path
-      
 
-      # - name: Upload JAR to EC2
-      #   uses: appleboy/scp-action@master
-      #   with:
-      #     host: ec2-13-235-243-167.ap-south-1.compute.amazonaws.com 
-      #     username: ubuntu
-      #     key: ${{ secrets.EC2_SSH_KEY }}
-      #     source: "target/*.jar"
-      #     target: "/home/ubuntu/springboot-app/app.jar"
       - name: List target folder contents before upload
         run: ls -l target/
 
       - name: Check file types in target
         run: file target/*
-          
-      - name: Clean up existing app.jar directory on EC2
-        uses: appleboy/ssh-action@master
+
+      - name: Clean up existing app.jar file on EC2
+        uses: appleboy/ssh-action@v0.1.8
         with:
-           host: ec2-13-235-243-167.ap-south-1.compute.amazonaws.com 
-           username: ubuntu
-           key: ${{ secrets.EC2_SSH_KEY }}
-           script: |
-             rm -rf /home/ubuntu/springboot-app/app.jar
-      - name: Wait before upload
-        uses: actions/github-script@v6
-        with:
+          host: ${{ secrets.Host }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            console.log('Waiting 5 seconds before upload')
-            await new Promise(resolve => setTimeout(resolve, 5000))
-      - name: Verify app.jar removal again before upload
-        uses: appleboy/ssh-action@v0.1.8
-        with:
-           host: ec2-13-235-243-167.ap-south-1.compute.amazonaws.com 
-           username: ubuntu
-           key: ${{ secrets.EC2_SSH_KEY }}
-           script: |
-             ls -ld /home/ubuntu/springboot-app/app.jar || echo "app.jar not found"
-
-
-      - name: Check app.jar after cleanup
-        uses: appleboy/ssh-action@v0.1.8
-        with:
-           host: ec2-13-235-243-167.ap-south-1.compute.amazonaws.com 
-           username: ubuntu
-           key: ${{ secrets.EC2_SSH_KEY }}
-           script: |
-             ls -ld /home/ubuntu/springboot-app/app.jar || echo "app.jar not found"
-
-
+            rm -f /home/ubuntu/springboot-app/app.jar
 
       - name: Upload JAR to EC2
         uses: appleboy/scp-action@v0.1.5
         with:
-          host: ec2-13-235-243-167.ap-south-1.compute.amazonaws.com 
+          host: ${{ secrets.Host }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           source: "target/BootMVCProj-8-CRM-CRUDAPP-0.0.1-SNAPSHOT.jar"
           target: "/home/ubuntu/springboot-app/app.jar"
-          strip_components: 1
+
       - name: Verify uploaded JAR
         uses: appleboy/ssh-action@v0.1.8
         with:
-            host: ec2-13-235-243-167.ap-south-1.compute.amazonaws.com 
-            username: ubuntu
-            key: ${{ secrets.EC2_SSH_KEY }}
-            script: |
-              ls -l /home/ubuntu/springboot-app/app.jar
-              file /home/ubuntu/springboot-app/app.jar
+          host: ${{ secrets.Host }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            ls -l /home/ubuntu/springboot-app/app.jar
+            file /home/ubuntu/springboot-app/app.jar
 
       - name: Restart Spring Boot Service
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@v0.1.8
         with:
-          host: ec2-13-235-243-167.ap-south-1.compute.amazonaws.com 
+          host: ${{ secrets.Host }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             sudo systemctl daemon-reload
             sudo systemctl restart springboot-app
-          
-      # - name: Restart Spring Boot service
-      #   uses: appleboy/ssh-action@master
-      #   with:
-      #     host: ec2-13-235-243-167.ap-south-1.compute.amazonaws.com 
-      #     username: ubuntu
-      #     key: ${{ secrets.EC2_SSH_KEY }}
-      #     script: |
-      #       sudo systemctl daemon-reload
-      #       sudo systemctl restart springboot-app
-

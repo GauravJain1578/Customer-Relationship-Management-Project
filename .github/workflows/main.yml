@@ -74,5 +74,4 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           source: "target/*.jar"
-          target: "/home/ubuntu/springboot-app/app.jar"
-          strip_components: 1
+          target: "/home/ubuntu/springboot-app/"

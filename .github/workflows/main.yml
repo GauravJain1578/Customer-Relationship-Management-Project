@@ -30,6 +30,8 @@ jobs:
     - name: Login to Amazon ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v1
+    - name: Build JAR
+      run: mvn clean package -DskipTests
 
     # 4. Build and push Docker image (force overwrite for mutable tags)
     - name: Build, Tag, and Push image to ECR

@@ -30,6 +30,8 @@ jobs:
     - name: Login to Amazon ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v1
+    - name: Build JAR
+      run: mvn clean package -DskipTests
 
     # 4. Build and push Docker image (force overwrite for mutable tags)
     - name: Build, Tag, and Push image to ECR
@@ -40,43 +42,107 @@ jobs:
         docker push $IMAGE_URI
 
     # 5. Deploy to EC2 via SSH
+
+    - name: Save SSH key
+      run: |
+       echo "${{ secrets.EC2_SSH_KEY }}" > private_key.pem
+       chmod 600 private_key.pem
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+       aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+       aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+       aws-region: ${{ secrets.AWS_REGION }}
+    # - name: Login to Amazon ECR
+    #   run:  |
+    #        aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <account-id>.dkr.ecr.us-east-1.amazonaws.com
+
+
     - name: Deploy to EC2
       run: |
-        ssh -o StrictHostKeyChecking=no ec2-user@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
-          CONTAINER_NAME=myapp
-          IMAGE="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}"
+       ssh -o StrictHostKeyChecking=no -i private_key.pem ubuntu@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
+       echo "Connected to EC2!"
+         CONTAINER_NAME=myapp
+         IMAGE="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}"
 
-          # Install Docker if not installed
-          if ! command -v docker &> /dev/null
-          then
-            sudo amazon-linux-extras install docker -y
-            sudo service docker start
-            sudo usermod -aG docker ec2-user
-          fi
+         # Install Docker if not installed
+         if ! command -v docker &> /dev/null
+         then
+           sudo apt-get update -y
+           sudo apt-get install -y docker.io
+           sudo systemctl start docker
+           sudo systemctl enable docker
+           sudo usermod -aG docker ubuntu
+        fi
 
-          # Stop and remove old container
-          if [ "$(docker ps -aq -f name=$CONTAINER_NAME)" ]; then
-            docker stop $CONTAINER_NAME
-            docker rm $CONTAINER_NAME
-          fi
+        # Stop and remove old container
+        if [ "$(docker ps -aq -f name=$CONTAINER_NAME)" ]; then
+          docker stop $CONTAINER_NAME
+          docker rm $CONTAINER_NAME
+        fi
 
-          # Remove old images
-          docker system prune -af
+       # Remove old images
+       docker system prune -af
 
-          # Login to ECR
-          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} \
-            | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}
+       # Login to ECR
+       aws ecr get-login-password --region ${{ secrets.AWS_REGION }} \
+         | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}
 
-          # Always pull latest version of the mutable tag
-          docker pull $IMAGE
+       # Always pull latest image
+       docker pull $IMAGE
 
-          # Run container with auto-restart on reboot
-          docker run -d \
-            --restart always \
-            --name $CONTAINER_NAME \
-            -p 8080:9999 \
-            -e DB_URL=${{ secrets.DATABASE_URL }} \
-            -e DB_USERNAME=${{ secrets.DATABASE_USERNAME }} \
-            -e DB_PASSWORD=${{ secrets.DATABASE_PASSWORD }} \
-            $IMAGE
-        EOF
+       # Run container with auto-restart on reboot
+       docker run -d \
+         --restart always \
+         --name $CONTAINER_NAME \
+         -p 8080:9999 \
+         -e DB_URL="${{ secrets.DATABASE_URL }}" \
+         -e DB_USERNAME="${{ secrets.DATABASE_USERNAME }}" \
+         -e DB_PASSWORD="${{ secrets.DATABASE_PASSWORD }}" \
+         $IMAGE
+       EOF
+
+    # - name: Deploy to EC2
+    #   run: |
+    #     ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
+    #       CONTAINER_NAME=myapp
+    #       IMAGE="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}"
+
+    #       # Install Docker if not installed
+    #       if ! command -v docker &> /dev/null
+    #       then
+    #         sudo apt-get update -y
+    #         sudo apt-get install -y docker.io
+    #         sudo systemctl start docker
+    #         sudo systemctl enable docker
+    #         sudo usermod -aG docker ubuntu
+           
+    #       fi
+
+    #       # Stop and remove old container
+    #       if [ "$(docker ps -aq -f name=$CONTAINER_NAME)" ]; then
+    #         docker stop $CONTAINER_NAME
+    #         docker rm $CONTAINER_NAME
+    #       fi
+
+    #       # Remove old images
+    #       docker system prune -af
+
+    #       # Login to ECR
+    #       aws ecr get-login-password --region ${{ secrets.AWS_REGION }} \
+    #         | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}
+
+    #       # Always pull latest version of the mutable tag
+    #       docker pull $IMAGE
+
+    #       # Run container with auto-restart on reboot
+    #       docker run -d \
+    #         --restart always \
+    #         --name $CONTAINER_NAME \
+    #         -p 8080:9999 \
+    #         -e DB_URL=${{ secrets.DATABASE_URL }} \
+    #         -e DB_USERNAME=${{ secrets.DATABASE_USERNAME }} \
+    #         -e DB_PASSWORD=${{ secrets.DATABASE_PASSWORD }} \
+    #         $IMAGE
+    #     EOF

@@ -1,0 +1,82 @@
+name: Build and Deploy to EC2
+
+on:
+  push:
+    branches:
+      - master
+
+env:
+  ECR_REPOSITORY: springappimages
+  IMAGE_TAG: latest
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. Checkout repo
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    # 2. Configure AWS Credentials
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    # 3. Login to Amazon ECR
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+
+    # 4. Build and push Docker image (force overwrite for mutable tags)
+    - name: Build, Tag, and Push image to ECR
+      run: |
+        IMAGE_URI=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+        echo "Building Docker image: $IMAGE_URI"
+        docker build --no-cache -t $IMAGE_URI .
+        docker push $IMAGE_URI
+
+    # 5. Deploy to EC2 via SSH
+    - name: Deploy to EC2
+      run: |
+        ssh -o StrictHostKeyChecking=no ec2-user@${{ secrets.EC2_PUBLIC_IP }} << 'EOF'
+          CONTAINER_NAME=myapp
+          IMAGE="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}"
+
+          # Install Docker if not installed
+          if ! command -v docker &> /dev/null
+          then
+            sudo amazon-linux-extras install docker -y
+            sudo service docker start
+            sudo usermod -aG docker ec2-user
+          fi
+
+          # Stop and remove old container
+          if [ "$(docker ps -aq -f name=$CONTAINER_NAME)" ]; then
+            docker stop $CONTAINER_NAME
+            docker rm $CONTAINER_NAME
+          fi
+
+          # Remove old images
+          docker system prune -af
+
+          # Login to ECR
+          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} \
+            | docker login --username AWS --password-stdin ${{ steps.login-ecr.outputs.registry }}
+
+          # Always pull latest version of the mutable tag
+          docker pull $IMAGE
+
+          # Run container with auto-restart on reboot
+          docker run -d \
+            --restart always \
+            --name $CONTAINER_NAME \
+            -p 8080:9999 \
+            -e DB_URL=${{ secrets.DATABASE_URL }} \
+            -e DB_USERNAME=${{ secrets.DATABASE_USERNAME }} \
+            -e DB_PASSWORD=${{ secrets.DATABASE_PASSWORD }} \
+            $IMAGE
+        EOF
